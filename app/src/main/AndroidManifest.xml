@@ -20,8 +20,13 @@
         </activity>
         <activity
             android:name=".PagePreviewActivity"
-            android:label="@string/title_activity_page_preview"
-            android:theme="@style/AppTheme.NoActionBar"></activity>
+            android:parentActivityName=".MainActivity" />
+        <activity
+            android:name=".RssActivity"
+            android:parentActivityName=".MainActivity" />
+        <activity
+            android:name=".WeatherActivity"
+            android:parentActivityName=".MainActivity" />
     </application>
 
 </manifest>

@@ -1,9 +1,18 @@
 package ru.sberbank.awsapp;
 
+import android.content.Intent;
+import android.net.Uri;
 import android.os.AsyncTask;
 import android.os.Bundle;
 import android.support.v7.app.AppCompatActivity;
+import android.support.v7.widget.CardView;
+import android.text.Html;
 import android.util.Log;
+import android.view.View;
+import android.widget.Button;
+import android.widget.EditText;
+import android.widget.ImageView;
+import android.widget.TextView;
 
 import java.io.BufferedReader;
 import java.io.InputStream;
@@ -14,13 +23,40 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 public class PagePreviewActivity extends AppCompatActivity {
+    Button urlBtn;
+    EditText urlField;
+    String urlAddress;
+    CardView card;
+    TextView cvName;
+    TextView cvDesc;
+    ImageView cvImg;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_page_preview);
+        urlBtn = findViewById(R.id.url_btn);
+        urlField = findViewById(R.id.url_field);
+        card = findViewById(R.id.card_view);
+        cvName = findViewById(R.id.pv_name_text);
+        cvDesc = findViewById(R.id.pv_desc_text);
+        cvImg = findViewById(R.id.pv_image);
 
-        new ParseTask().execute("https://fb.com");
+        urlBtn.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                urlAddress = urlField.getText().toString();
+                new ParseTask().execute(urlAddress);
+                Log.d("123", urlAddress);
+            }
+        });
+
+        card.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                startActivity(new Intent(Intent.ACTION_VIEW).setData(Uri.parse(urlField.getText().toString())));
+            }
+        });
     }
 
     private class ParseTask extends AsyncTask<String, Void, String> {
@@ -61,7 +97,7 @@ public class PagePreviewActivity extends AppCompatActivity {
         protected void onPostExecute(String strJson) {
             super.onPostExecute(strJson);
 
-            Pattern patternTitle = Pattern.compile("<title>(.*)<\\/title>");
+            Pattern patternTitle = Pattern.compile("<title>(.*?)</title>");
             Pattern patternMetaDesc = Pattern.compile("<meta.*?name=\"description\".*?content=\"(.*?)\".*?>|<meta.*?content=\"(.*?)\".*?name=\"description\".*?>");
             Pattern patternBodyDesc = Pattern.compile("<h1.*?>(.*)<\\/h1>");
             Pattern patternMetaImg = Pattern.compile("<meta.*?image\".*?content=\"(.*?)\".*?>|<meta.*?content=\"(.*?)\".*?image\".*?>");
@@ -74,15 +110,16 @@ public class PagePreviewActivity extends AppCompatActivity {
 
             // выводим целиком полученную json-строку
             if (matcherTitle.find()) {
-                Log.d("123", matcherTitle.group(1));
+                card.setVisibility(View.VISIBLE);
+                cvName.setText(matcherTitle.group(1));
             } else {
                 Log.d("123", "nothing");
             }
 
             if (matcherMetaDesc.find()) {
-                Log.d("123", matcherMetaDesc.group(1));
+                cvDesc.setText(Html.fromHtml(matcherMetaDesc.group(1)));
             } else if (matcherBodyDesc.find()) {
-                Log.d("123", matcherBodyDesc.group(1));
+                cvDesc.setText(Html.fromHtml(matcherBodyDesc.group(1)));
             } else {
                 Log.d("123", "nothing");
             }
@@ -92,7 +129,6 @@ public class PagePreviewActivity extends AppCompatActivity {
             } else if (matcherMetaImg.find()) {
                 Log.d("123", matcherMetaImg.group(1));
             }
-
         }
     }
 }

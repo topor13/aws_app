@@ -15,9 +15,9 @@ public class MainActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
-        pagePreviewBtn = (Button) findViewById(R.id.previewButton);
-        rssBtn = (Button) findViewById(R.id.rssButton);
-        weatherBtn = (Button) findViewById(R.id.weatherButton);
+        pagePreviewBtn = findViewById(R.id.previewButton);
+        rssBtn = findViewById(R.id.rssButton);
+        weatherBtn = findViewById(R.id.weatherButton);
 
         pagePreviewBtn.setOnClickListener(new View.OnClickListener() {
             @Override

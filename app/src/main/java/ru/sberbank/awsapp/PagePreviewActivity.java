@@ -1,6 +1,8 @@
 package ru.sberbank.awsapp;
 
+import android.content.Context;
 import android.content.Intent;
+import android.graphics.BitmapFactory;
 import android.net.Uri;
 import android.os.AsyncTask;
 import android.os.Bundle;
@@ -9,10 +11,13 @@ import android.support.v7.widget.CardView;
 import android.text.Html;
 import android.util.Log;
 import android.view.View;
+import android.view.inputmethod.InputMethodManager;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.ImageView;
+import android.widget.ProgressBar;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import java.io.BufferedReader;
 import java.io.InputStream;
@@ -30,6 +35,7 @@ public class PagePreviewActivity extends AppCompatActivity {
     TextView cvName;
     TextView cvDesc;
     ImageView cvImg;
+    ProgressBar pvProgress;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -41,13 +47,15 @@ public class PagePreviewActivity extends AppCompatActivity {
         cvName = findViewById(R.id.pv_name_text);
         cvDesc = findViewById(R.id.pv_desc_text);
         cvImg = findViewById(R.id.pv_image);
+        pvProgress = findViewById(R.id.pv_progress);
 
         urlBtn.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
+                InputMethodManager imm = (InputMethodManager)getSystemService(Context.INPUT_METHOD_SERVICE);
+                imm.hideSoftInputFromWindow(urlField.getWindowToken(), 0);
                 urlAddress = urlField.getText().toString();
                 new ParseTask().execute(urlAddress);
-                Log.d("123", urlAddress);
             }
         });
 
@@ -59,23 +67,27 @@ public class PagePreviewActivity extends AppCompatActivity {
         });
     }
 
-    private class ParseTask extends AsyncTask<String, Void, String> {
+    private class ParseTask extends AsyncTask<String, Void, PreviewData> {
 
         HttpURLConnection urlConnection = null;
         BufferedReader reader = null;
-        String resultJson = "";
+        String resultHtml = "";
+        String imageUrl = "";
+        PreviewData pd = new PreviewData("", "", null);
 
         @Override
-        protected String doInBackground(String... urls) {
-            // получаем данные с внешнего ресурса
-            try {
-                URL url;
-                Log.d("123", urls[0]);
-                url = new URL(urls[0]);
+        protected void onPreExecute() {
+            pvProgress.setVisibility(View.VISIBLE);
+            urlBtn.setEnabled(false);
+        }
 
+        @Override
+        protected PreviewData doInBackground(String... urls) {
+            try {
+                URL url = new URL(urls[0]);
                 urlConnection = (HttpURLConnection) url.openConnection();
-                urlConnection.setRequestMethod("GET");
                 urlConnection.connect();
+                Log.d("123", String.valueOf(urlConnection.getResponseCode()));
 
                 InputStream inputStream = urlConnection.getInputStream();
                 StringBuffer buffer = new StringBuffer();
@@ -85,49 +97,67 @@ public class PagePreviewActivity extends AppCompatActivity {
                 while ((line = reader.readLine()) != null) {
                     buffer.append(line);
                 }
-                resultJson = buffer.toString();
+                resultHtml = buffer.toString();
+
+                Pattern patternTitle = Pattern.compile("<title>(.*?)</title>");
+                Pattern patternMetaDesc = Pattern.compile("<meta.*?name=\"description\".*?content=\"(.*?)\".*?>");
+                Pattern patternBodyDesc = Pattern.compile("<h1|h2|h3|span|p.*>(.*?)</h1|/h2|/h3|/span|/p>");
+                Pattern patternMetaImg = Pattern.compile("<meta.*?image\".*?content=\"(.*?)\".*?>");
+                Pattern patternBodyImg = Pattern.compile("img.*?src=\"(.*?)\".*");
+                Matcher matcherTitle = patternTitle.matcher(resultHtml);
+                Matcher matcherMetaDesc = patternMetaDesc.matcher(resultHtml);
+                Matcher matcherBodyDesc = patternBodyDesc.matcher(resultHtml);
+                Matcher matcherMetaImg = patternMetaImg.matcher(resultHtml);
+                Matcher matcherBodyImg = patternBodyImg.matcher(resultHtml);
+
+                if (matcherTitle.find()) {
+                    pd.setName(matcherTitle.group(1));
+                }
+
+                if (matcherMetaDesc.find()) {
+                    pd.setDescription(matcherMetaDesc.group(1));
+                } else if (matcherBodyDesc.find()) {
+                    pd.setDescription(matcherBodyDesc.group(1));
+                }
+
+                if (matcherMetaImg.find()) {
+                    imageUrl = matcherMetaImg.group(1);
+                } else if (matcherBodyImg.find()) {
+                    imageUrl = matcherBodyImg.group(1);
+                }
 
             } catch (Exception e) {
                 e.printStackTrace();
             }
-            return resultJson;
+
+
+            try {
+                URL url = new URL(imageUrl);
+                urlConnection = (HttpURLConnection) url.openConnection();
+                InputStream inputStream = urlConnection.getInputStream();
+                pd.setImage(BitmapFactory.decodeStream(inputStream));
+            }
+            catch (Exception e) {
+                e.printStackTrace();
+            }
+
+            return pd;
         }
 
         @Override
-        protected void onPostExecute(String strJson) {
-            super.onPostExecute(strJson);
+        protected void onPostExecute(PreviewData pd) {
+            super.onPostExecute(pd);
 
-            Pattern patternTitle = Pattern.compile("<title>(.*?)</title>");
-            Pattern patternMetaDesc = Pattern.compile("<meta.*?name=\"description\".*?content=\"(.*?)\".*?>|<meta.*?content=\"(.*?)\".*?name=\"description\".*?>");
-            Pattern patternBodyDesc = Pattern.compile("<h1.*?>(.*)<\\/h1>");
-            Pattern patternMetaImg = Pattern.compile("<meta.*?image\".*?content=\"(.*?)\".*?>|<meta.*?content=\"(.*?)\".*?image\".*?>");
-            Pattern patternBodyImg = Pattern.compile("img.*?src=\"(.*?)\".*");
-            Matcher matcherTitle = patternTitle.matcher(strJson);
-            Matcher matcherMetaDesc = patternMetaDesc.matcher(strJson);
-            Matcher matcherBodyDesc = patternBodyDesc.matcher(strJson);
-            Matcher matcherMetaImg = patternMetaImg.matcher(strJson);
-            Matcher matcherBodyImg = patternBodyImg.matcher(strJson);
+            pvProgress.setVisibility(View.INVISIBLE);
+            urlBtn.setEnabled(true);
 
-            // выводим целиком полученную json-строку
-            if (matcherTitle.find()) {
+            if (pd.name.length() > 0) {
                 card.setVisibility(View.VISIBLE);
-                cvName.setText(matcherTitle.group(1));
+                cvName.setText(pd.getName());
+                cvDesc.setText(Html.fromHtml(pd.getDescription()));
+                cvImg.setImageBitmap(pd.getImage());
             } else {
-                Log.d("123", "nothing");
-            }
-
-            if (matcherMetaDesc.find()) {
-                cvDesc.setText(Html.fromHtml(matcherMetaDesc.group(1)));
-            } else if (matcherBodyDesc.find()) {
-                cvDesc.setText(Html.fromHtml(matcherBodyDesc.group(1)));
-            } else {
-                Log.d("123", "nothing");
-            }
-
-            if (matcherBodyImg.find()) {
-                Log.d("123", matcherBodyImg.group(1));
-            } else if (matcherMetaImg.find()) {
-                Log.d("123", matcherMetaImg.group(1));
+                Toast.makeText(PagePreviewActivity.this, "not loaded, checkout url and try again", Toast.LENGTH_SHORT).show();
             }
         }
     }
